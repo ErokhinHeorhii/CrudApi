@@ -1,124 +1,88 @@
-import {IncomingMessage, ServerResponse} from 'http';
-import {parse} from 'url';
-import {validateUserData, validateUUID} from '../utils/validate.ts';
-import {createUser, deleteUser, getAllUsers, getUserById, updateUser} from "../services/service.ts";
+import { IncomingMessage, ServerResponse } from 'http';
+import { getAllUsers, getUserById, createUser, updateUser, deleteUser } from '../services/service.ts';
+import { validateUUID, validateUserData } from '../utils/validate.ts';
+import { parse } from 'url';
 
-export const handleUserRequest = async (req: IncomingMessage, res: ServerResponse) => {
-    const url = parse(req.url || '', true);
-    const method = req.method;
-    const idMatch = url.pathname?.match(/^\/api\/users\/([a-zA-Z0-9-]+)$/);
-    const isCollection = url.pathname === '/api/users';
+let reqRef: IncomingMessage;
+let resRef: ServerResponse;
 
-    if (method === 'GET' && isCollection) {
-        const users = await getAllUsers();
-        res.writeHead(200, {'Content-Type': 'application/json'});
-        res.end(JSON.stringify(users));
-        return;
-    }
+const send = (status: number, data?: object) => {
+    resRef.writeHead(status, { 'Content-Type': 'application/json' });
+    resRef.end(data ? JSON.stringify(data) : undefined);
+};
 
-    if (method === 'GET' && idMatch) {
-        const userId = idMatch[1];
-        if (!validateUUID(userId)) {
-            res.writeHead(400);
-            res.end(JSON.stringify({message: 'Invalid UUID'}));
-            return;
+const handleBody = (req: IncomingMessage, callback: (body: string) => void) => {
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => callback(body));
+};
+
+export const getAllUsersHandler = async () => {
+    const users = await getAllUsers();
+    send(200, users);
+};
+
+export const getUserByIdHandler = async () => {
+    const userId = getIdFromPath();
+    if (!validateUUID(userId)) return send(400, { message: 'Invalid UUID' });
+
+    const user = await getUserById(userId);
+    if (!user) return send(404, { message: 'User not found' });
+
+    send(200, user);
+};
+
+export const createUserHandler = () => {
+    handleBody(reqRef, async body => {
+        try {
+            const data = JSON.parse(body);
+            if (!validateUserData(data)) return send(400, { message: 'Invalid user data' });
+
+            const user = await createUser(data);
+            send(201, user);
+        } catch {
+            send(400, { message: 'Invalid JSON format' });
         }
+    });
+};
 
-        const user = await getUserById(userId);
-        if (!user) {
-            res.writeHead(404);
-            res.end(JSON.stringify({message: 'User not found'}));
-            return;
+export const updateUserHandler = () => {
+    const userId = getIdFromPath();
+    if (!validateUUID(userId)) return send(400, { message: 'Invalid UUID' });
+
+    handleBody(reqRef, async body => {
+        try {
+            const data = JSON.parse(body);
+            if (!validateUserData(data)) return send(400, { message: 'Invalid user data' });
+
+            const updated = await updateUser(userId, data);
+            if (!updated) return send(404, { message: 'User not found' });
+
+            send(200, updated);
+        } catch {
+            send(400, { message: 'Invalid JSON format' });
         }
+    });
+};
 
-        res.writeHead(200, {'Content-Type': 'application/json'});
-        res.end(JSON.stringify(user));
-        return;
-    }
-    if (method === 'POST' && isCollection) {
-        let body = '';
-        req.on('data', chunk => {
-            body += chunk;
-        });
+export const deleteUserHandler = async () => {
+    const userId = getIdFromPath();
+    if (!validateUUID(userId)) return send(400, { message: 'Invalid UUID' });
 
-        req.on('end', async () => {
-            try {
-                const data = JSON.parse(body);
-                const {username, age, email, hobbies} = data;
+    const deleted = await deleteUser(userId);
+    if (!deleted) return send(404, { message: 'User not found' });
 
-                if (
-                    !validateUserData(data)
-                ) {
-                    res.writeHead(400, {'Content-Type': 'application/json'});
-                    res.end(JSON.stringify({message: 'Invalid user data'}));
-                    return;
-                }
+    resRef.writeHead(204);
+    resRef.end();
+};
 
-                const newUser = await createUser({username, age, email, hobbies});
+const getIdFromPath = (): string => {
+    const url = parse(reqRef.url || '', true);
+    const match = url.pathname?.match(/^\/api\/users\/([a-zA-Z0-9-]+)$/);
+    return match?.[1] || '';
+};
 
-                res.writeHead(201, {'Content-Type': 'application/json'});
-                res.end(JSON.stringify(newUser));
-            } catch {
-                res.writeHead(400, {'Content-Type': 'application/json'});
-                res.end(JSON.stringify({message: 'Invalid JSON format'}));
-            }
-        });
-
-        return;
-    }
-    if (method === 'PUT' && idMatch) {
-        const userId = idMatch[1];
-        if (!validateUUID(userId)) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Invalid UUID' }));
-            return;
-        }
-
-        let body = '';
-        req.on('data', chunk => (body += chunk));
-        req.on('end', async () => {
-            try {
-                const data = JSON.parse(body);
-                if (!validateUserData(data)) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ message: 'Invalid user data' }));
-                    return;
-                }
-
-                const updated = await updateUser(userId, data);
-                if (!updated) {
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ message: 'User not found' }));
-                    return;
-                }
-
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(updated));
-            } catch {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ message: 'Invalid JSON format' }));
-            }
-        });
-        return;
-    }
-    if (method === 'DELETE' && idMatch) {
-        const userId = idMatch[1];
-
-        if (!validateUUID(userId)) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Invalid UUID' }));
-            return;
-        }
-
-        const success = await deleteUser(userId);
-        if (!success) {
-            res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'User not found' }));
-            return;
-        }
-
-        res.writeHead(204);
-        res.end();
-        return;
-    }
+export const setReqRes = (req: IncomingMessage, res: ServerResponse) => {
+    reqRef = req;
+    resRef = res;
 };

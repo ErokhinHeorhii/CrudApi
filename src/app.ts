@@ -1,5 +1,5 @@
 import { createServer } from 'http';
-import {handleUserRequest} from "./controllers/controller.ts";
+import {handleUserRequest} from "./controllers/handlers.ts";
 
 const server = createServer((req, res) => {
   if (req.url?.startsWith('/api/users')) {
