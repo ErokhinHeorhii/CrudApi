@@ -1,9 +1,7 @@
 import {IncomingMessage, ServerResponse} from 'http';
-import {v4 as uuidv4} from 'uuid';
 import {parse} from 'url';
 import {validateUserData, validateUUID} from '../utils/validate.ts';
-import {createUser, getAllUsers, getUserById} from "../services/service.ts";
-import {User} from "../models/models.ts";
+import {createUser, deleteUser, getAllUsers, getUserById, updateUser} from "../services/service.ts";
 
 export const handleUserRequest = async (req: IncomingMessage, res: ServerResponse) => {
     const url = parse(req.url || '', true);
@@ -66,6 +64,61 @@ export const handleUserRequest = async (req: IncomingMessage, res: ServerRespons
             }
         });
 
+        return;
+    }
+    if (method === 'PUT' && idMatch) {
+        const userId = idMatch[1];
+        if (!validateUUID(userId)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Invalid UUID' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', chunk => (body += chunk));
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                if (!validateUserData(data)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ message: 'Invalid user data' }));
+                    return;
+                }
+
+                const updated = await updateUser(userId, data);
+                if (!updated) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ message: 'User not found' }));
+                    return;
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(updated));
+            } catch {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ message: 'Invalid JSON format' }));
+            }
+        });
+        return;
+    }
+    if (method === 'DELETE' && idMatch) {
+        const userId = idMatch[1];
+
+        if (!validateUUID(userId)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Invalid UUID' }));
+            return;
+        }
+
+        const success = await deleteUser(userId);
+        if (!success) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'User not found' }));
+            return;
+        }
+
+        res.writeHead(204);
+        res.end();
         return;
     }
 };
