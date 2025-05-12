@@ -1,15 +1,13 @@
-import express from 'express';
-import dotenv from 'dotenv';
+import { createServer } from 'http';
+import {handleUserRequest} from "./controllers/controller.ts";
 
-dotenv.config();
-
-const app = express();
-const port = process.env.PORT || 4000;
-
-app.get('/', (req, res) => {
-  res.json({ message: 'Server is working!' });
+const server = createServer((req, res) => {
+  if (req.url?.startsWith('/api/users')) {
+    handleUserRequest(req, res);
+  } else {
+    res.writeHead(404);
+    res.end(JSON.stringify({ message: 'Route not found' }));
+  }
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+export default server;

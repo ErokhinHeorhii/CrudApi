@@ -6,7 +6,7 @@
   "main": "dist/app.js",
   "scripts": {
     "start": "node --loader ts-node/esm src/app.ts",
-    "dev": "nodemon --config nodemon.json",
+    "dev": "nodemon --loader ts-node/esm src/server.ts",
     "build": "webpack --config webpack.config.js",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
