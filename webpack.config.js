@@ -1,31 +1,46 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import nodeExternals from 'webpack-node-externals';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default {
   mode: 'development',
-  entry: './src/app.ts',
+  target: 'node',
+  entry: './src/server.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'bundle.cjs',
+    module: true,
+  },
   module: {
     rules: [
       {
         test: /\.tsx?$/,
-        use: 'ts-loader',
+        use: {
+          loader: 'ts-loader',
+          options: {
+            transpileOnly: true,
+          },
+        },
         exclude: /node_modules/,
       },
     ],
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js'],
+    extensions: ['.ts', '.tsx', '.js'],
   },
-  output: {
-    filename: 'bundle.cjs',
-    path: path.resolve(__dirname, 'dist'),
-  },
-  devtool: 'source-map',
-  target: 'node',
   experiments: {
+    outputModule: true,
     topLevelAwait: true,
   },
+  externalsPresets: { node: true },
+  externals: [
+    nodeExternals({
+      modulesFromFile: true,
+      importType: 'module',
+    }),
+  ],
+  devtool: 'source-map',
 };
