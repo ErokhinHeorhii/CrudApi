@@ -2,6 +2,7 @@ import { IncomingMessage, ServerResponse } from 'http';
 import { getAllUsers, getUserById, createUser, updateUser, deleteUser } from '../services/service.ts';
 import { validateUUID, validateUserData } from '../utils/validate.ts';
 import { parse } from 'url';
+import { AppError, handleError } from '../utils/errorHandler.ts';
 
 let reqRef: IncomingMessage;
 let resRef: ServerResponse;
@@ -18,62 +19,99 @@ const handleBody = (req: IncomingMessage, callback: (body: string) => void) => {
 };
 
 export const getAllUsersHandler = async () => {
-    const users = await getAllUsers();
-    send(200, users);
+    try {
+        const users = await getAllUsers();
+        send(200, users);
+    } catch (error: any) {
+        handleError(error, resRef);
+    }
 };
 
 export const getUserByIdHandler = async () => {
-    const userId = getIdFromPath();
-    if (!validateUUID(userId)) return send(400, { message: 'Invalid UUID' });
+    try {
+        const userId = getIdFromPath();
+        if (!validateUUID(userId)) {
+            throw new AppError(400, 'Invalid UUID format');
+        }
 
-    const user = await getUserById(userId);
-    if (!user) return send(404, { message: 'User not found' });
+        const user = await getUserById(userId);
+        if (!user) {
+            throw new AppError(404, 'User not found');
+        }
 
-    send(200, user);
+        send(200, user);
+    } catch (error: any) {
+        handleError(error, resRef);
+    }
 };
 
 export const createUserHandler = () => {
     handleBody(reqRef, async body => {
         try {
             const data = JSON.parse(body);
-            if (!validateUserData(data)) return send(400, { message: 'Invalid user data' });
+            if (!validateUserData(data)) {
+                throw new AppError(400, 'Invalid user data');
+            }
 
             const user = await createUser(data);
             send(201, user);
-        } catch {
-            send(400, { message: 'Invalid JSON format' });
+        } catch (error: any) {
+            if (error instanceof SyntaxError) {
+                handleError(new AppError(400, 'Invalid JSON format'), resRef);
+            } else {
+                handleError(error, resRef);
+            }
         }
     });
 };
 
 export const updateUserHandler = () => {
     const userId = getIdFromPath();
-    if (!validateUUID(userId)) return send(400, { message: 'Invalid UUID' });
+    if (!validateUUID(userId)) {
+        handleError(new AppError(400, 'Invalid UUID format'), resRef);
+        return;
+    }
 
     handleBody(reqRef, async body => {
         try {
             const data = JSON.parse(body);
-            if (!validateUserData(data)) return send(400, { message: 'Invalid user data' });
+            if (!validateUserData(data)) {
+                throw new AppError(400, 'Invalid user data');
+            }
 
             const updated = await updateUser(userId, data);
-            if (!updated) return send(404, { message: 'User not found' });
+            if (!updated) {
+                throw new AppError(404, 'User not found');
+            }
 
             send(200, updated);
-        } catch {
-            send(400, { message: 'Invalid JSON format' });
+        } catch (error: any) {
+            if (error instanceof SyntaxError) {
+                handleError(new AppError(400, 'Invalid JSON format'), resRef);
+            } else {
+                handleError(error, resRef);
+            }
         }
     });
 };
 
 export const deleteUserHandler = async () => {
-    const userId = getIdFromPath();
-    if (!validateUUID(userId)) return send(400, { message: 'Invalid UUID' });
+    try {
+        const userId = getIdFromPath();
+        if (!validateUUID(userId)) {
+            throw new AppError(400, 'Invalid UUID format');
+        }
 
-    const deleted = await deleteUser(userId);
-    if (!deleted) return send(404, { message: 'User not found' });
+        const deleted = await deleteUser(userId);
+        if (!deleted) {
+            throw new AppError(404, 'User not found');
+        }
 
-    resRef.writeHead(204);
-    resRef.end();
+        resRef.writeHead(204);
+        resRef.end();
+    } catch (error: any) {
+        handleError(error, resRef);
+    }
 };
 
 const getIdFromPath = (): string => {
